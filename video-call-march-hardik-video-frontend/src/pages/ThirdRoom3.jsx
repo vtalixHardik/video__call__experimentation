@@ -143,52 +143,64 @@ const ThirdRoom3 = ({ appointmentId, name, report, transcript }) => {
 	// function to handle Successfully Joining Room at the Server Side Application
 	const handleJoinSuccess = async (data) => {
 		
-		console.log("joined room successfully ", data);
-		
+		// Add existing messages pf previous call
 		if (data.chats && data.chats.length !== 0) {
-			console.log("adding chats");
+
 			setMessages(data.chats);
+
 			data.chats.map((item, index) => {
 				messagesRef.current.push(item);
 			});
 		}
+
+		// add notes of previous call
 		if (data.notes && data.notes.length !== 0) {
 			setNotes(data.notes);
 		}
+
+		// add name of remote User
 		setPartnerName(data?.opponent_name || "Ghost");
-		// userId.current = data.socketId;
 
 		const isFirst = !!(data.remoteSocket === null); // change to checking if there was remote Socket ID or offer or not
-		console.log("is First", isFirst);
+
 		if (isFirst) {
-			console.log("listening for offer");
+
+			// wait for second user to join call from there application
 			listenForOffer(answerPeer);
+
 		} else {
-			console.log("sending offer and listening for answer");
+
+			// Store the Socket ID of the first user
 			otherUser.current = data.remoteSocket;
+
+			// create a peer connection and send the Offer to other user waiting for your call
 			callPeer();
 		}
 	};
 
 	// function to start call if you are second user to join the call
 	const callPeer = () => {
+
+		// create and store Peer Instance in a ref
 		peerRef.current = createPeer(userId.current);
 
+		// add your tracks to your instance of peer connection
 		userStream?.current
 			?.getTracks()
 			.forEach((track) =>
 				peerRef.current.addTrack(track, userStream.current)
 			);
 
-		console.log("peerRef is ", peerRef.current);
-
+			// create a dataChannel for Chat functionality
 		sendChannel.current = peerRef.current.createDataChannel("sendChannel");
 
+		// Add an Event Listener on the data channel for incoming messages
 		sendChannel.current.onmessage = handleReceiveMessage;
 	};
 
 	// function to initialize peer connection
 	const createPeer = (id) => {
+		// Create a Peer instance, A peer instance represents a connection with other, peer; For a group video call we need to create a new and different instance every time a new user joins and that Instance will represent the call with that user
 		const peer = new RTCPeerConnection({
 			iceServers: [
 				{ urls: "stun:stun.stunprotocol.org" },
@@ -201,7 +213,7 @@ const ThirdRoom3 = ({ appointmentId, name, report, transcript }) => {
 					credential: "KeyVante1O8",
 				},
 			],
-			iceTransportPolicy: "relay", // relay is another ENUM value that is allowed , this value is used to test TURN servers
+			iceTransportPolicy: "all", // relay is another ENUM value that is allowed , this value is used to test TURN servers
 		});
 		/*
 		 
@@ -218,15 +230,19 @@ const ThirdRoom3 = ({ appointmentId, name, report, transcript }) => {
 
 		*/
 
+		// add an event listener to handle the Ice Generated when a Peer Connection is initialized
 		peer.onicecandidate = handleICECandidateEvent;
 
+		// Add an event listener to handle tracks of remote peer, it is generally triggered after DSP exchange
 		peer.ontrack = handleTrackEvent;
 
+		// This event listener is responsible for starting the call
 		peer.onnegotiationneeded = () => {
 			console.log("sending offer auto");
 			handleNegotiationNeededEvent(id);
 		};
 
+		// This event listenre logs ICE connection State
 		peer.oniceconnectionstatechange = () => {
 			console.log(
 				"🔄 ICE Connection State:",
@@ -238,6 +254,8 @@ const ThirdRoom3 = ({ appointmentId, name, report, transcript }) => {
 				setStartTranscription(true);
 			}
 		};
+
+		// This Event Listener logs Connections of user
 		peer.onconnectionstatechange = () => {
 			console.log("Peer state:", peer.connectionState);
 		};
@@ -245,96 +263,7 @@ const ThirdRoom3 = ({ appointmentId, name, report, transcript }) => {
 		return peer;
 	};
 
-	// function to handle incoming offer and Answer the Peer in its response
-	const answerPeer = (incoming) => {
-
-		otherUser.current = incoming.from;
-
-		setPartnerName(incoming?.name || "Ghost");
-
-		// create peer to add offer as remote description
-		peerRef.current = createPeer();
-
-		peerRef.current.ondatachannel = (event) => {
-			sendChannel.current = event.channel;
-			sendChannel.current.onmessage = handleReceiveMessage;
-		};
-
-		const desc = new RTCSessionDescription(incoming.offer);
-
-		peerRef.current
-			?.setRemoteDescription(desc)
-			.then(() => {
-				userStream.current
-					.getTracks()
-					.forEach((track) =>
-						peerRef.current.addTrack(track, userStream.current)
-					);
-			})
-			.then(() => {
-				return peerRef.current?.createAnswer();
-			})
-			.then((answer) => {
-
-				peerRef.current?.setLocalDescription(answer);
-
-				return answer;
-			})
-			.then((answer) => {
-
-				// send answer to other peer
-				sendAnswer(appointment_id, answer, incoming.from);
-				// set answerSent state to true
-				setAnswerSent(true);
-			});
-	};
-
-	// function to handle incoming answer
-	const handleAnswer = async (message) => {
-		
-		// validate if peer connection was initialized before handling answer 
-		if (!peerRef.current) {
-
-			console.log("❌ Peer Connection is not initialized yet!");
-			
-			return;
-		}
-
-		// Create a Session Description Protocol (SDP) to handle incoming answer
-		const desc = new RTCSessionDescription(message?.answer);
-
-		await peerRef?.current
-			?.setRemoteDescription(desc)
-			.catch((e) => console.log(e));
-
-		console.log("peer ref in after handle answer is ", peerRef.current);
-	};
-
-	// function to handle tracks of Remote Video
-	const handleTrackEvent = (e) => {
-		console.log("Track event received! Waiting for remote video...");
-
-		const waitForRemoteVideo = setInterval(() => {
-			// "Runs even after clear Interval 1 if after remote Video set"
-			console.log(
-				"src of video before setting ",
-				remoteVideo.current.srcObject
-			);
-			if (remoteVideo.current && remoteVideo.current.srcObject === null) {
-				remoteVideo.current.srcObject = e.streams[0];
-				console.log(
-					"src of video after setting ",
-					remoteVideo.current.srcObject
-				);
-				console.log("✅ Remote video set!");
-			}
-			if (remoteVideo.current && remoteVideo.current.srcObject !== null) {
-				clearInterval(waitForRemoteVideo);
-			}
-		}, 100);
-	};
-
-	// function to create offer
+	// function to create offer and send it to the remote user
 	const handleNegotiationNeededEvent = () => {
 		peerRef.current
 			.createOffer()// create SDP Offer using WebRTC API's in built method and pass it to `.then()`
@@ -355,6 +284,103 @@ const ThirdRoom3 = ({ appointmentId, name, report, transcript }) => {
 				listenForAnswer(handleAnswer);
 			})
 			.catch((e) => console.log("error is ", e));
+	};
+
+	// function to handle tracks of Remote Video
+	const handleTrackEvent = (e) => {
+
+		// add tracks after a small delay
+		const waitForRemoteVideo = setInterval(() => {
+
+			console.log("src of video before setting ", remoteVideo.current.srcObject);
+			if (remoteVideo.current && remoteVideo.current.srcObject === null) {
+				
+				remoteVideo.current.srcObject = e.streams[0];
+				
+				console.log("src of video after setting ",remoteVideo.current.srcObject);
+				
+				console.log("✅ Remote video set!");
+			}
+			// Clear Interval as Remote Video has been set
+			if (remoteVideo.current && remoteVideo.current.srcObject !== null) {
+				clearInterval(waitForRemoteVideo);
+			}
+		}, 100);
+	};
+
+	// function to handle incoming offer and Answer the Peer in its response
+	const answerPeer = (incoming) => {
+
+		// store remote Socket ID of other user
+		otherUser.current = incoming.from;
+
+		// Store the name of other user
+		setPartnerName(incoming?.name || "Ghost");
+
+		// create peer to add offer as remote description
+		peerRef.current = createPeer();
+
+		// accept the Data Channel the other user created
+		peerRef.current.ondatachannel = (event) => {
+			sendChannel.current = event.channel;
+			sendChannel.current.onmessage = handleReceiveMessage;
+		};
+
+		// Parse the incoming Offer in a Session Description
+		const desc = new RTCSessionDescription(incoming.offer);
+
+		// Set that Incoming Description as Remote Description
+		peerRef.current
+			?.setRemoteDescription(desc)
+			.then(() => {
+				// Add tracks to the Peer Connection
+				userStream.current
+					.getTracks()
+					.forEach((track) =>
+						peerRef.current.addTrack(track, userStream.current)
+					);
+			})
+			.then(() => {
+				// Create an Answer SDP
+				return peerRef.current?.createAnswer();
+			})
+			.then((answer) => {
+				// Set the Generated SDP as Local Description
+
+				peerRef.current?.setLocalDescription(answer);
+
+				return answer;
+			})
+			.then((answer) => {
+
+				// send answer to other peer
+				sendAnswer(appointment_id, answer, incoming.from);
+				
+				// set answerSent state to true
+				setAnswerSent(true);
+			});
+	};
+
+	// function to handle incoming answer
+	const handleAnswer = async (message) => {
+		
+		// validate if peer connection was initialized before handling answer 
+		if (!peerRef.current) {
+
+			console.log("❌ Peer Connection is not initialized yet!");
+			
+			return;
+		}
+
+		// Create a Session Description Protocol (SDP) to handle incoming answer SDP
+		const desc = new RTCSessionDescription(message?.answer);
+
+		// Set the Incoming SDP as Remote Description
+		await peerRef?.current
+			?.setRemoteDescription(desc)
+			.catch((e) => console.log(e));
+
+		console.log("peer ref in after handle answer is ", peerRef.current);
 	};
 
 	// function to send ICE candidate to other user
