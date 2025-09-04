@@ -1,5 +1,5 @@
 import React from "react";
-import CallButton from "../components/CallButton";
+import CallButton from "../../components/CallButton";
 
 const CallPage = () => {
   const appointmentId = "2"; // Example Appointment ID

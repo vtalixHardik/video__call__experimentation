@@ -2,7 +2,7 @@ import { io } from "socket.io-client";
 import axios from "axios";
 
 // const socket = io("http://192.168.1.11:3015", {
-const socket = io("http://192.168.1.24:3015", {
+const socket = io("http://192.168.1.23:3015", {
   autoConnect: false,
   path: "/api/v1/signalling/socket",  // this must match the backend
   transports: ["websocket"],          // optional: force WebSocket

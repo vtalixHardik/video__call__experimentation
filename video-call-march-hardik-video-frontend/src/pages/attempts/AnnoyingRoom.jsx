@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { connectSocket, joinRoom, listenForJoinSuccess, sendOffer, listenForAnswer, listenForErrors, listenForOffer, sendAnswer, sendICE, listenForICE, disconnectSocket } from "../services/socket";
+import { connectSocket, joinRoom, listenForJoinSuccess, sendOffer, listenForAnswer, listenForErrors, listenForOffer, sendAnswer, sendICE, listenForICE, disconnectSocket } from "../../services/socket";
 
 import mic__controls from "../assets/mic__control.svg";
 import video__controls from "../assets/video__control.svg";

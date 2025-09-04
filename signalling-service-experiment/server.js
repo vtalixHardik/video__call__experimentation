@@ -1,25 +1,25 @@
-// todo: the code after this comment will be the latest.
-
+// dependency imports
 require("dotenv").config();
-
 const http = require("http");
 const { Server } = require("socket.io");
-const app = require("./src/app"); // Import Express app
+const { Op } = require("sequelize");
+const { v4: uuidv4 } = require("uuid");
+
+// file imports
 const sequelize = require("./src/config/db");
-// const Meeting = require("./src/models/Meetings");
+const app = require("./src/app"); // Import Express app
 const MongoMeeting = require("./src/model/Meeting.js");
 const Appointments = require("./src/models/Appointments");
 const { validateToken } = require("./src/middlewares/authMiddleware");
-const { Op } = require("sequelize");
 const { Connection } = require("./src/config/mongo.js");
-const { v4: uuidv4 } = require("uuid");
 
-Connection();
+
+Connection();// connect to MongoDB
 
 const server = http.createServer(app);
-// const io = new Server(server, { cors: { origin: "*" } });
+
 const io = new Server(server, {
-  path: "/api/v1/signalling/socket", // very important
+  path: "/api/v1/signalling/socket", // adds URL to 
   cors: {
     origin: "*", // Adjust for prod
     methods: ["GET", "POST"],
@@ -27,6 +27,7 @@ const io = new Server(server, {
   },
 });
 
+// To check if server is up and running in Production
 app.get("/api/v1/signalling/health-status", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate"); // Prevent caching
   res.set("Pragma", "no-cache");
@@ -34,27 +35,31 @@ app.get("/api/v1/signalling/health-status", (req, res) => {
   return res.status(200).send("Server is running");
 });
 
+// To save chats around a particular meeting
 app.put("/api/v1/signalling/save-chats/:appointment_id", async (req, res) => {
-  console.log("Saving chats for appointment ID:", req.body.chats);
+  
+  // Find Meeting By ID
   const meeting = await MongoMeeting.findOne({
     appointment_id: req.params.appointment_id,
   });
-  console.log("Meeting from chats is ", meeting);
+  
+  // If meeting found save chat
   if (meeting) {
+    
     meeting.chats = req.body.chats;
-    // await Meeting.update(
-    //     { chats: req.body },
-    //     { where: { appointment_id: appointment_id } }
-    //   );
+    
     await meeting.save();
   }
+  
   return res.status(200).json({
     success: true,
     message: "Chats saved successfully",
   });
+
 });
 
 io.on("connection", (socket) => {
+
   console.log(`User connected: ${socket.id}`);
 
   socket.on("join_room", async ({ appointment_id, name }) => {
@@ -126,23 +131,26 @@ io.on("connection", (socket) => {
     }
   });
 
-  socket.on(
-    "send_answer",
-    async ({ appointment_id, answer, remoteSocketId }) => {
+  socket.on("send_answer",async ({ appointment_id, answer, remoteSocketId }) => {
       try {
         console.log(
           "================================sending the answer======================================="
         );
 
         console.log(
-          "remote socket id from the send answer is ",
+          "remote socket ID in send answer is ",
           remoteSocketId
         );
 
-        // console.log("Answer is ", answer);
-
         console.log("appointment ID is ", appointment_id);
 
+        if (!remoteSocketId) {
+          console.log("No remote user found in the send answer");
+          socket.emit("error", { message: "No remote user found" });
+          return;
+        }
+
+        // Find meeting in Database
         const meeting = await MongoMeeting.findOne({
           appointment_id,
         });
@@ -150,12 +158,6 @@ io.on("connection", (socket) => {
         if (!meeting) {
           console.log("Not found meeting in the send answer");
           socket.emit("error", { message: "No meeting found" });
-          return;
-        }
-
-        if (!remoteSocketId) {
-          console.log("No remote user found in the send answer");
-          socket.emit("error", { message: "No remote user found" });
           return;
         }
 

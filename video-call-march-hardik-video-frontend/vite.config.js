@@ -8,4 +8,11 @@ export default defineConfig({
     tailwindcss(),
     react(),
   ],
+  server: {
+    host: true, // listen on all addresses
+    hmr: {
+      host: '192.168.1.23', // e.g. '192.168.1.10'
+      port: 5173, // or whatever your vite port is
+    },
+  },
 })
