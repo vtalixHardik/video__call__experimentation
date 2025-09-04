@@ -216,18 +216,22 @@ The Client Side application is built in ReactJS
 
 The routing is handled through dependencies such as react-router-dom
 
+The Client Side Application contains of two Pages
+1. Login
+2. Room
+
+0. App.jsx: This is where Routing happens, this is where referencing storing names and appointment ID are stored
+1. Login2.jsx Page: This is used to for a user to add a unique AppointmentID and their Name( When integrated with vtalix, appointment ID and name are taken automatically)
+2.ThirdRoom3.jsx Page: This is where the actual Video Call Happens, it takes AppointmentId, name , report and transcript as props
+
 
 ```
 ```
 External Dependencies
-
+1.) react-router-dom
+2.) socket.io-client
 
 ```
-
-### The Lazy Fox
-
-#### The Lazy Fox
-
-##### The Lazy Fox
-
-###### The Lazy Fox
+ThirdRoom.jsx
+```
+```
