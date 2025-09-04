@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+// file imports, functions
+
 import {
 	connectSocket,
 	joinRoom,
@@ -16,79 +17,134 @@ import {
 	saveChats,
 } from "../services/socket";
 
+// file imports, assets
 import sendButton from "../assets/send__white.svg";
 import mic__controls from "../assets/mic__control.svg";
 import video__controls from "../assets/video__control.svg";
 import end__call from "../assets/end__call.svg";
+
+// dependency imports, react
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+
+// dependency imports, socket.io-client
 import { io } from "socket.io-client";
 
+
 const ThirdRoom3 = ({ appointmentId, name, report, transcript }) => {
-	const userVideo = useRef(); // for passing in video tag
-	const remoteVideo = useRef(); // for passing in video tag
-	const peerRef = useRef(); // for peer
-	const socketRef = useRef(); // for Socket emits and ons
-	const otherUser = useRef(); //  for remoteSocketID
-	const userStream = useRef(); //  for addTrack
-	const isFocusRef = useRef(true);
-
-	// const dispatch = useDispatch();
-
-	const sendChannel = useRef();
-	const [text, setText] = useState("");
-	const [answerSent, setAnswerSent] = useState(false);
-	const [notes, setNotes] = useState();
-	const [isPartnerVideoActive, setIsPartnerVideo] = useState(true);
-	const [partnerName, setPartnerName] = useState();
-	const [messages, setMessages] = useState([]);
-	const messagesRef = useRef([]);
-	const [newMessage, setNewMessage] = useState(false);
-
-	const [startTranscription, setStartTranscription] = useState(false);
-	// const [transcript, setTranscript] = useState(false);
-	const mediaRecorderRef = useRef(null);
-
-	// Reference to the message container
-	const messagesEndRef = useRef(null);
-
-	// Scroll to the bottom whenever messages change
-	useEffect(() => {
-		if (messagesEndRef.current) {
-			messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
-		}
-	}, [messages]); // This effect runs when messages change
-
 	const appointment_id = appointmentId.current;
-
-	const userId = useRef();
 	let new_socket;
+	const navigate = useNavigate();
 
-	const receivedICECandidates = useRef();
-	// const [receivedICECandidatesState, setReceivedICECandidatesState] = useState(new Set());
-	const [receivedICECandidatesState, setReceivedICECandidatesState] =
-		useState([]);
-
+	// Refs and States for both Functionality and UI
+	const remoteVideo = useRef(); // for passing in video tag
+	const [notes, setNotes] = useState();
+	const messagesRef = useRef([]);
+	const [messages, setMessages] = useState([]);
+	
+	// Refs and States for UI
+	const userVideo = useRef(); // for passing in video tag
+	const [partnerName, setPartnerName] = useState();
+	
 	const [focus, setFocus] = useState("chat");
+	const isFocusRef = useRef(true);
+	const [newMessage, setNewMessage] = useState(false);
+	
+	const [text, setText] = useState("");
+	const messagesEndRef = useRef(null);
+	
+	// Refs and States for Functionality
+	const socketRef = useRef(); // for Socket emits and ons
+	const userId = useRef();
+	const otherUser = useRef(); //  for remoteSocketID
+	
+	const peerRef = useRef(); // for peer
+	const userStream = useRef(); //  for addTrack
+	const sendChannel = useRef();
+	const [answerSent, setAnswerSent] = useState(false);
+	
 	const [isCameraOn, setIsCameraOn] = useState(true);
 	const [isMicOn, setIsMicOn] = useState(true);
+	
 	const [signalingState, setSignalingState] = useState(null);
+	
+	const receivedICECandidates = useRef();
+	// const [receivedICECandidatesState, setReceivedICECandidatesState] = useState(new Set());
+	const [receivedICECandidatesState, setReceivedICECandidatesState] = useState([]);
+	
+	const [startTranscription, setStartTranscription] = useState(false);
+	
+	const mediaRecorderRef = useRef(null);
 
-	// Monitor and update signaling state
+	// Monitor and update signaling state, only when the correct signalling state is their, we will apply ICE Candidates
 	useEffect(() => {
+
 		const interval = setInterval(() => {
+
 			const currentState = peerRef?.current?.signalingState;
-			if (currentState !== signalingState) {
+			if (peerRef?.current?.signalingState && currentState !== signalingState) {
 				setSignalingState(currentState);
 			}
 		}, 100); // or on some RTC events if available
 
 		return () => clearInterval(interval);
+
 	}, [signalingState]);
 
-	const navigate = useNavigate();
+	// function to start video call
+	useEffect(() => {
+		console.log("Starting with getting user Media");
+		
+		navigator?.mediaDevices
+			?.getUserMedia({
+				video: true,
+				audio: true,
+			})
+			.then(async (stream) => {
 
+				// taking the permission from the user's browser and setting the local stream in the video tag
+				userVideo.current.srcObject = stream;// adding our own stream to Video Tag
+				userStream.current = stream;// storing our stream to add tracks later
+
+				new_socket = connectSocket();// storing socket instance to get Socket ID later
+
+				// function to get Socket ID
+				const checkSocketId = async () => {
+					while (!new_socket?.id) {
+						await new Promise((resolve) => setTimeout(resolve, 10)); // Retry until socket ID is available
+					}
+					userId.current = new_socket.id;
+				};
+
+				await checkSocketId();
+				console.log("printing after we get our Socket ID ", userId.current);
+
+				// now we will hit the join room
+				joinRoom(appointment_id, name.current);
+
+				// listen for Server to emit If we joined Room Successfully
+				listenForJoinSuccess(handleJoinSuccess);
+				
+				// Listen for Incoming ICE Candidates
+				listenForICE(handleNewICECandidate);
+				
+				// Listen if the User Left
+				listenForUserLeft(endCall);
+
+				// Listen for errors in Server Side Application
+				listenForErrors(endCall);
+			});
+
+		return () => {
+			// endCall();
+		};
+	}, []);
+
+	// function to handle Successfully Joining Room at the Server Side Application
 	const handleJoinSuccess = async (data) => {
+		
 		console.log("joined room successfully ", data);
+		
 		if (data.chats && data.chats.length !== 0) {
 			console.log("adding chats");
 			setMessages(data.chats);
@@ -114,10 +170,83 @@ const ThirdRoom3 = ({ appointmentId, name, report, transcript }) => {
 		}
 	};
 
+	// function to start call if you are second user to join the call
+	const callPeer = () => {
+		peerRef.current = createPeer(userId.current);
+
+		userStream?.current
+			?.getTracks()
+			.forEach((track) =>
+				peerRef.current.addTrack(track, userStream.current)
+			);
+
+		console.log("peerRef is ", peerRef.current);
+
+		sendChannel.current = peerRef.current.createDataChannel("sendChannel");
+
+		sendChannel.current.onmessage = handleReceiveMessage;
+	};
+
+	// function to initialize peer connection
+	const createPeer = (id) => {
+		const peer = new RTCPeerConnection({
+			iceServers: [
+				{ urls: "stun:stun.stunprotocol.org" },
+				{ urls: "stun:stun3.l.google.com:5349" },
+				{ urls: "stun:stun4.l.google.com:19302" },
+				{ urls: "stun:stun4.l.google.com:5349" },
+				{
+					urls: "turn:turnserver.vtalix.com:3478?transport=tcp", // TCP fallback
+					username: "turnuser",
+					credential: "KeyVante1O8",
+				},
+			],
+			iceTransportPolicy: "relay", // relay is another ENUM value that is allowed , this value is used to test TURN servers
+		});
+		/*
+		 
+		urls: [
+			"turn:turnserver.vtalix.com:3478?transport=udp", // UDP first
+			"turn:turnserver.vtalix.com:3478?transport=tcp", // TCP fallback
+			"turns:turnserver.vtalix.com:5349?transport=tcp", // TLS fallback (if enabled by DevOps)
+		],
+		{
+	 	urls: "relay1.expressturn.com:3480?transport=tcp",
+	 	username: "000000002071139238",
+		credential: "sNLp+wneWEYF1yw4mj3bq4bxqgM=",
+		 },
+
+		*/
+
+		peer.onicecandidate = handleICECandidateEvent;
+
+		peer.ontrack = handleTrackEvent;
+
+		peer.onnegotiationneeded = () => {
+			console.log("sending offer auto");
+			handleNegotiationNeededEvent(id);
+		};
+
+		peer.oniceconnectionstatechange = () => {
+			console.log(
+				"🔄 ICE Connection State:",
+				peerRef.current.iceConnectionState
+			);
+
+			if (peer.iceConnectionState === "connected") {
+				console.log("✅ Connection stabilized!");
+				setStartTranscription(true);
+			}
+		};
+		peer.onconnectionstatechange = () => {
+			console.log("Peer state:", peer.connectionState);
+		};
+
+		return peer;
+	};
+
+	// function to handle incoming offer and Answer the Peer in its response
 	const answerPeer = (incoming) => {
-		console.log(
-			"================================================================================================"
-		);
 
 		otherUser.current = incoming.from;
 
@@ -130,8 +259,6 @@ const ThirdRoom3 = ({ appointmentId, name, report, transcript }) => {
 			sendChannel.current = event.channel;
 			sendChannel.current.onmessage = handleReceiveMessage;
 		};
-
-		console.log("peer.current in answer peer is ", peerRef.current);
 
 		const desc = new RTCSessionDescription(incoming.offer);
 
@@ -148,13 +275,13 @@ const ThirdRoom3 = ({ appointmentId, name, report, transcript }) => {
 				return peerRef.current?.createAnswer();
 			})
 			.then((answer) => {
+
 				peerRef.current?.setLocalDescription(answer);
+
 				return answer;
 			})
 			.then((answer) => {
-				console.log(
-					"================================================================================================"
-				);
+
 				// send answer to other peer
 				sendAnswer(appointment_id, answer, incoming.from);
 				// set answerSent state to true
@@ -164,14 +291,17 @@ const ThirdRoom3 = ({ appointmentId, name, report, transcript }) => {
 
 	// function to handle incoming answer
 	const handleAnswer = async (message) => {
+		
+		// validate if peer connection was initialized before handling answer 
 		if (!peerRef.current) {
+
 			console.log("❌ Peer Connection is not initialized yet!");
+			
 			return;
 		}
 
+		// Create a Session Description Protocol (SDP) to handle incoming answer
 		const desc = new RTCSessionDescription(message?.answer);
-
-		console.log("peerRef is ", peerRef?.current);
 
 		await peerRef?.current
 			?.setRemoteDescription(desc)
@@ -180,6 +310,7 @@ const ThirdRoom3 = ({ appointmentId, name, report, transcript }) => {
 		console.log("peer ref in after handle answer is ", peerRef.current);
 	};
 
+	// function to handle tracks of Remote Video
 	const handleTrackEvent = (e) => {
 		console.log("Track event received! Waiting for remote video...");
 
@@ -203,29 +334,233 @@ const ThirdRoom3 = ({ appointmentId, name, report, transcript }) => {
 		}, 100);
 	};
 
-	const handleNewICECandidateMsg = (incoming) => {
-		console.log("i'm handleIceMessage with socket id as ", incoming);
-		// return;
-		const candidate = new RTCIceCandidate(incoming);
-		console.log("peer ref in handleIceCandidate is ", peerRef.current);
-
+	// function to create offer
+	const handleNegotiationNeededEvent = () => {
 		peerRef.current
-			?.addIceCandidate(candidate)
-			.then(() => {
-				console.log("✅ ICE candidate added successfully:", candidate);
-				console.log("Updated Peer Connection:", peerRef.current);
-			})
-			.catch((e) => {
-				console.log("error in hadnnle ice candidate is ", e);
-			});
-		console.log(
-			"Receivers after ICE candidate:",
-			peerRef.current.getReceivers()
-		);
+			.createOffer()// create SDP Offer using WebRTC API's in built method and pass it to `.then()`
+			.then((offer) => {
 
-		console.log("ICE cancidate set ", peerRef?.current);
+				// Set the self generated SDP offer as Local Description
+				peerRef.current.setLocalDescription(offer);
+
+				// return the offer for `.then()`
+				return offer;
+			})
+			.then((offer) => {
+
+				// send the offer to remote User
+				sendOffer(appointment_id, offer, otherUser.current);
+				
+				// wait for their answer
+				listenForAnswer(handleAnswer);
+			})
+			.catch((e) => console.log("error is ", e));
 	};
 
+	// function to send ICE candidate to other user
+	const handleICECandidateEvent = (event) => {
+
+		console.log("generated candidate is ", event.candidate);
+
+		if (event.candidate) {
+
+			console.log("Sending ICE candidate ", event.candidate, "to ", otherUser.current);
+			
+			sendICE(otherUser.current, event.candidate);
+		}
+		if (!event.candidate) {
+			console.log("Generated Candidate is null, marking the completion of all candidates");
+		}
+	};
+
+	// function to handle Incoming candidates from the Server Side Application
+	const handleNewICECandidate = async (candidate) => {
+		console.log(
+			"Peer connection while handling incoming ICE candidates is ",
+			peerRef.current
+		);
+
+		if (peerRef?.current && peerRef?.current?.remoteDescription !== null) {
+			// if (peerRef?.current?.iceConnectionState === "connected") {
+			console.log("remoteDESC is ", peerRef?.current?.remoteDescription);
+			console.log("candidate is ", candidate);
+			console.log(
+				"✅ Connection stable! Applying ICE candidate immediately."
+			);
+
+			console.log("stored Candidates while applying Candidates immediately is ", receivedICECandidates.current);
+
+			await peerRef.current.addIceCandidate(
+				new RTCIceCandidate(candidate)
+			);
+		} else {
+			console.log("remoteDESC is ", peerRef?.current?.remoteDescription);
+
+			console.log(
+				"🟡 Storing ICE candidate until connection is stable:",
+				candidate
+			);
+
+			let currentCandidates = receivedICECandidates.current || [];
+
+			console.log("current candidates are", currentCandidates);
+
+			currentCandidates = [...currentCandidates, candidate];
+
+			receivedICECandidates.current = currentCandidates;
+
+			console.log("incomming candidates", receivedICECandidates.current);
+
+			setReceivedICECandidatesState((prev) => [...prev, candidate]);
+		}
+	};
+
+	// useEffect to add stored Ice candidates
+	useEffect(() => {
+
+		console.log("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++");
+
+		console.log(receivedICECandidates?.current?.length || 0, "received candidates are ", receivedICECandidates?.current);
+
+		console.log("signalling state is ", peerRef?.current?.signalingState);
+
+		console.log("remote video Current src is ", remoteVideo.current.srcObject);
+
+		// function to add ICE Candidates
+		const addCandidates = async () => {
+			if (
+				receivedICECandidates?.current &&// make sure received candidates are not undefined
+				receivedICECandidates?.current?.length !== 0 &&// make sure if received candidates is not an empty array
+				peerRef?.current?.signalingState === "stable" &&// make sure the signalling state is stable before applying ICE Candidates
+				answerSent === true// make sure the SDP Answer was sent before applying the ICE Candidates
+			) {
+				console.log("ICE candidate condition passed");
+
+				// Iterate through each Candidate and Apply them
+				for (const candidate of receivedICECandidates.current) {
+		
+					console.log("Candidate being Applied", candidate);
+		
+					try {
+
+						await peerRef.current.addIceCandidate(
+							new RTCIceCandidate(candidate)
+						);
+
+						console.log("Candidate being Applied");
+					
+					} catch (error) {
+		
+						console.error("Error adding ICE candidate:", error);
+		
+					}
+				}
+
+				console.log("Added all candidates Successfully");
+
+				// Clear the candidates after adding them if necessary
+				// receivedICECandidates.current = [];
+			}
+
+			return;
+		};
+
+		// call function
+		addCandidates();
+	}, [receivedICECandidatesState, signalingState, answerSent]);
+
+	// function to send message using data channel
+	const sendMessage = (e) => {
+		
+		e.preventDefault();
+
+		// Validation to prevent sending empty messages
+		if (text.trim()?.length === 0 || text === undefined) {
+			setText("");
+			return;
+		}
+
+		// Send message only when Data Channel is established
+		if (sendChannel.current?.readyState !== "open") return;
+
+		sendChannel.current.send(text?.toString()?.trim());
+
+		// set the Local Message after sending message to Remote Client
+		setMessages((messages) => [
+			...messages,
+			{ isMe: true, user_id: userId.current, message: text },
+		]);
+
+		messagesRef.current.push({
+			isMe: true,
+			user_id: userId.current,
+			message: text,
+		});
+
+		setText("");
+	};
+
+	// function to handle incoming chat messages
+	const handleReceiveMessage = (e) => {
+
+		// Change UI
+		setMessages((messages) => [
+			...messages,
+			{ isMe: false, message: e.data },
+		]);
+
+		// Change the ref storing Chats
+		messagesRef.current.push({
+			isMe: false,
+			message: e.data,
+			old_text: true,
+			user_id: otherUser.current,
+		});
+
+		// For creating a In-App notification
+		if (isFocusRef.current === false) {
+			setNewMessage(true);
+		}
+	};
+
+	// Scroll to the bottom whenever messages change
+	useEffect(() => {
+		if (messagesEndRef.current) {
+			messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
+		}
+	}, [messages]); // This effect runs when messages change
+
+	// Function to toggle the microphone
+	const toggleMic = () => {
+
+		const audioTrack = userStream?.current?.getAudioTracks()[0];
+
+		if (audioTrack) {
+		
+			const newState = !audioTrack.enabled;
+		
+			audioTrack.enabled = newState;
+
+			setIsMicOn((prev) => !prev);
+		}
+	};
+
+	// Function to toggle the microphone
+	const toggleCamera = () => {
+
+		const videoTrack = userStream?.current?.getVideoTracks()[0];
+
+		if (videoTrack) {
+
+			const newState = !videoTrack.enabled;
+
+			videoTrack.enabled = newState;
+
+			setIsCameraOn((prev) => !prev);
+		}
+	};
+
+	// function to endCall
 	const endCall = () => {
 		console.log("Ending call...");
 
@@ -300,356 +635,51 @@ const ThirdRoom3 = ({ appointmentId, name, report, transcript }) => {
 
 		receivedICECandidates.current = [];
 
-		const getReport = async () => {
-			console.log("[Front] Fetching report…");
-			try {
-				const resp = await fetch(
-					// "http://localhost:4004/transcription/report",
-					"https://vtalix-transcription.upteky.com/transcription/report",
-					{
-						method: "POST",
-						headers: {
-							"Content-Type": "application/json",
-							"x-api-key":
-								"2f791882d52905ebecc9057ac0e26da58f456caaf51b8344eef85c14d5d1686d",
-						},
-						body: JSON.stringify({
-							callId: appointmentId.current,
-						}),
-					}
-				);
+		if (answerSent) {
+			const getReport = async () => {
+				console.log("[Front] Fetching report…");
+				try {
+					const resp = await fetch(
+						// "http://localhost:4004/transcription/report",
+						"https://vtalix-transcription.upteky.com/transcription/report",
+						{
+							method: "POST",
+							headers: {
+								"Content-Type": "application/json",
+								"x-api-key":
+									"2f791882d52905ebecc9057ac0e26da58f456caaf51b8344eef85c14d5d1686d",
+							},
+							body: JSON.stringify({
+								callId: appointmentId.current,
+							}),
+						}
+					);
 
-				console.log("[Front] Report response status:", resp);
+					console.log("[Front] Report response status:", resp);
 
-				const body = await resp.json();
+					const body = await resp.json();
 
-				console.log("[Front] report response:", body);
+					console.log("[Front] report response:", body);
 
-				// assuming body.mergedTranscript
+					// assuming body.mergedTranscript
 
-				console.log("Report in is ", body.mergedTranscript);
+					console.log("Report in is ", body.mergedTranscript);
 
-				//   setReport(body.mergedTranscript);
-				report.current = body.mergedTranscript;
+					//   setReport(body.mergedTranscript);
+					report.current = body.mergedTranscript;
 
-				// navigate("/");
-			} catch (err) {
-				console.error("Failed to fetch report:", err);
-			}
-		};
+					// navigate("/");
+				} catch (err) {
+					console.error("Failed to fetch report:", err);
+				}
+			};
 
-		getReport();
+			getReport();
+		}
 
 		// Navigate back to the home page
 		console.log("Navigating");
 		navigate("/");
-	};
-
-	// function to start video call
-	useEffect(() => {
-		console.log("Starting with getting user Media");
-		navigator?.mediaDevices
-			?.getUserMedia({
-				video: true,
-				audio: true,
-			})
-			.then(async (stream) => {
-				// taking the permission from the user's browser and setting the local stream in the video tag
-				userVideo.current.srcObject = stream;
-				userStream.current = stream;
-
-				new_socket = connectSocket();
-				const checkSocketId = async () => {
-					while (!new_socket?.id) {
-						await new Promise((resolve) => setTimeout(resolve, 10)); // Retry until socket ID is available
-					}
-					userId.current = new_socket.id;
-					console.log("Your Socket ID:", new_socket.id);
-				};
-
-				await checkSocketId();
-				console.log(
-					"printing after we get our own ID ",
-					userId.current
-				);
-
-				// now we will hit the join room
-				joinRoom(appointment_id, name.current);
-				listenForJoinSuccess(handleJoinSuccess);
-				listenForICE(handleNewICECandidate);
-				listenForUserLeft(endCall);
-				listenForErrors(endCall);
-			});
-
-		return () => {
-			// endCall();
-		};
-	}, []);
-
-	// function to handle incomming chat messages
-	const handleReceiveMessage = (e) => {
-		setMessages((messages) => [
-			...messages,
-			{ isMe: false, message: e.data },
-		]);
-		messagesRef.current.push({
-			isMe: false,
-			message: e.data,
-			old_text: true,
-			user_id: otherUser.current,
-		});
-		if (isFocusRef.current === false) {
-			setNewMessage(true);
-		}
-	};
-
-	// function to start call if you are second user
-	const callPeer = () => {
-		peerRef.current = createPeer(userId.current);
-
-		userStream?.current
-			?.getTracks()
-			.forEach((track) =>
-				peerRef.current.addTrack(track, userStream.current)
-			);
-
-		console.log("peerRef is ", peerRef.current);
-
-		sendChannel.current = peerRef.current.createDataChannel("sendChannel");
-
-		sendChannel.current.onmessage = handleReceiveMessage;
-	};
-
-	// function to initialize peer connection
-	const createPeer = (id) => {
-		const peer = new RTCPeerConnection({
-			iceServers: [
-				{ urls: "stun:stun.stunprotocol.org" },
-				{ urls: "stun:stun3.l.google.com:5349" },
-				{ urls: "stun:stun4.l.google.com:19302" },
-				{ urls: "stun:stun4.l.google.com:5349" },
-				{
-					urls:"turn:turnserver.vtalix.com:3478?transport=tcp", // TCP fallback
-					username: "turnuser",
-					credential: "KeyVante1O8",
-				}
-			],
-			iceTransportPolicy: "all",// relay is another ENUM value that is allowed , this value is used to test TURN servers
-		});
-		/*
-		 
-		urls: [
-			"turn:turnserver.vtalix.com:3478?transport=udp", // UDP first
-			"turn:turnserver.vtalix.com:3478?transport=tcp", // TCP fallback
-			"turns:turnserver.vtalix.com:5349?transport=tcp", // TLS fallback (if enabled by DevOps)
-		],
-		{
-	 	urls: "relay1.expressturn.com:3480?transport=tcp",
-	 	username: "000000002071139238",
-		credential: "sNLp+wneWEYF1yw4mj3bq4bxqgM=",
-		 },
-		*/
-
-		peer.onicecandidate = handleICECandidateEvent;
-
-		peer.ontrack = handleTrackEvent;
-
-		peer.onnegotiationneeded = () => {
-			console.log("sending offer auto");
-			handleNegotiationNeededEvent(id);
-		};
-
-		peer.oniceconnectionstatechange = () => {
-			console.log(
-				"🔄 ICE Connection State:",
-				peerRef.current.iceConnectionState
-			);
-
-			if (peer.iceConnectionState === "connected") {
-				console.log("✅ Connection stabilized!");
-				setStartTranscription(true);
-			}
-		};
-		peer.onconnectionstatechange = () => {
-			console.log("Peer state:", peer.connectionState);
-		};
-
-		return peer;
-	};
-
-	// function to create offer
-	const handleNegotiationNeededEvent = (id) => {
-		peerRef.current
-			.createOffer()
-			.then((offer) => {
-				console.log("offer is ", offer);
-				peerRef.current.setLocalDescription(offer);
-				return offer;
-			})
-			.then((offer) => {
-				console.log("sdp is ", offer);
-				console.log("appointment ID is ", appointment_id);
-				console.log("offer is ", offer);
-				console.log("remoteSocket is ", otherUser.current);
-
-				sendOffer(appointment_id, offer, otherUser.current);
-				listenForAnswer(handleAnswer);
-			})
-			.catch((e) => console.log(e));
-	};
-
-	// function to send ICE candidate to other user
-	const handleICECandidateEvent = (event) => {
-		console.log("event is ", event);
-		console.log("event.candidate is ", event.candidate);
-		if (event.candidate) {
-			console.log("Sending ICE candidate", event.candidate, "to", otherUser.current);
-			sendICE(otherUser.current, event.candidate);
-		}
-		if(!event.candidate){
-			console.log("candidate is null, marking the completion of all candidates");
-		}
-	};
-
-	// function to either apply or store candidates
-	const handleNewICECandidate = async (candidate) => {
-		console.log(
-			"Peer connection while handling incoming ICE candidates is ",
-			peerRef.current
-		);
-
-		if (peerRef?.current?.remoteDescription !== null) {
-		// if (peerRef?.current?.iceConnectionState === "connected") {
-			console.log("remoteDESC is ", peerRef?.current?.remoteDescription);
-			console.log("✅ Connection stable! Applying ICE candidate immediately.");
-
-			await peerRef.current.addIceCandidate(
-				new RTCIceCandidate(candidate)
-			);
-		} else {
-			console.log("remoteDESC is ", peerRef?.current?.remoteDescription);
-
-			console.log(
-				"🟡 Storing ICE candidate until connection is stable:",
-				candidate
-			);
-
-			let currentCandidates = receivedICECandidates.current || [];
-
-			console.log("current candidates are", currentCandidates);
-
-			currentCandidates = [...currentCandidates, candidate];
-
-			receivedICECandidates.current = currentCandidates;
-
-			console.log("incomming candidates", receivedICECandidates.current);
-
-			setReceivedICECandidatesState((prev) => [...prev, candidate]);
-		}
-	};
-
-	// useEffect to add stored Ice candidates
-	useEffect(() => {
-		console.log(
-			"+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
-		);
-
-		console.log(
-			receivedICECandidates?.current?.length || 0,
-			"received candidates are ",
-			receivedICECandidates?.current
-		);
-
-		console.log("signalling state is ", peerRef?.current?.signalingState);
-
-		console.log(
-			"remote video Current src is ",
-			remoteVideo.current.srcObject
-		);
-		const addCandidates = async () => {
-			if (
-				receivedICECandidates?.current &&
-				receivedICECandidates?.current?.length !== 0 &&
-				peerRef?.current?.signalingState === "stable" &&
-				answerSent === true
-			) {
-				console.log(
-					"ICE candidate condition passed",
-					receivedICECandidates.current
-				);
-
-				for (const candidate of receivedICECandidates.current) {
-					console.log("Applying candidate ", candidate);
-					try {
-						console.log("Adding ICE candidate: 1", candidate);
-						await peerRef.current.addIceCandidate(
-							new RTCIceCandidate(candidate)
-						);
-						console.log("Added ICE candidate:", candidate);
-					} catch (error) {
-						console.error("Error adding ICE candidate:", error);
-					}
-				}
-				console.log("Added all candidates");
-
-				// Clear the candidates after adding them if necessary
-				// receivedICECandidates.current = [];
-			}
-			return;
-		};
-
-		addCandidates();
-	}, [receivedICECandidatesState, signalingState, answerSent]);
-
-	// function to send message using data channel
-	const sendMessage = (e) => {
-		e.preventDefault();
-		console.log("Sending message");
-		console.log("user is ", userId.current);
-		if (text.trim()?.length === 0 || text === undefined) {
-			setText("");
-			return;
-		}
-
-		if (sendChannel.current?.readyState !== "open") return;
-		sendChannel.current.send(text?.toString()?.trim());
-		setMessages((messages) => [
-			...messages,
-			{ isMe: true, user_id: userId.current, message: text },
-		]);
-		messagesRef.current.push({
-			isMe: true,
-			user_id: userId.current,
-			message: text,
-		});
-		setText("");
-	};
-
-	// Function to toggle the microphone
-	const toggleMic = () => {
-		const audioTrack = userStream?.current?.getAudioTracks()[0];
-
-		if (audioTrack) {
-			const newState = !audioTrack.enabled;
-			audioTrack.enabled = newState;
-			// audioTrack.muted = newState;
-
-			setIsMicOn((prev) => !prev);
-		}
-	};
-
-	// Function to toggle the microphone
-	const toggleCamera = () => {
-		// const audioTrack = userVideo.current?.getAudioTracks()[0];
-		const videoTrack = userStream?.current?.getVideoTracks()[0];
-
-		if (videoTrack) {
-			const newState = !videoTrack.enabled;
-			videoTrack.enabled = newState;
-			// audioTrack.muted = newState;
-
-			setIsCameraOn((prev) => !prev);
-		}
 	};
 
 	// Transcription code

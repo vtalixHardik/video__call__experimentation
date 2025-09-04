@@ -1,8 +1,11 @@
 import { io } from "socket.io-client";
 import axios from "axios";
 
-// const socket = io("http://192.168.1.11:3015", {
-const socket = io("http://192.168.1.23:3015", {
+
+const ip = 14;
+const URL = `http://192.168.1.${ip}:3015`;
+
+const socket = io(URL, {
   autoConnect: false,
   path: "/api/v1/signalling/socket",  // this must match the backend
   transports: ["websocket"],          // optional: force WebSocket
@@ -15,10 +18,18 @@ const socket = io("http://192.168.1.23:3015", {
 // });
 
 export const connectSocket = () => {
+  try {
+
+  console.log("URL before IF is", URL);
   if (!socket.connected) {
+    console.log("URL before connecting is", URL);
     socket.connect()
     return socket;
   };
+  console.log("URL after IF is", URL);
+  } catch (error) {
+    console.log("Error while connection to socket is ", error);
+  }
 };
 
 

@@ -1,17 +1,20 @@
-import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+// file imports
 // import Call from "./pages/Call";
-import VideoCall from "./pages/attempts/VideoCall";
-import Lobby from "./pages/attempts/Lobby";
+// import VideoCall from "./pages/attempts/VideoCall";
+// import Lobby from "./pages/attempts/Lobby";
 import Login2 from "./pages/Login2";
 // import Room2 from "./pages/Room4";
-import Room2 from "./pages/attempts/Room2";
-import SecondRoom from "./pages/attempts/SecondRoom";
-import Room4 from "./pages/attempts/Room4";
-import Room5 from "./pages/attempts/Room5";
-import ThirdRoom from "./pages/attempts/ThirdRoom";
-import ThirdRoom2 from "./pages/attempts/ThirdRoom2";
-import { useRef } from "react";
+// import Room2 from "./pages/attempts/Room2";
+// import SecondRoom from "./pages/attempts/SecondRoom";
+// import Room4 from "./pages/attempts/Room4";
+// import Room5 from "./pages/attempts/Room5";
+// import ThirdRoom from "./pages/attempts/ThirdRoom";
+// import ThirdRoom2 from "./pages/attempts/ThirdRoom2";
 import ThirdRoom3 from "./pages/ThirdRoom3";
+
+// dependency imports
+import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import { useRef } from "react";
 
 // Hardik here
 function App() {
