@@ -13,6 +13,13 @@ Although the objective of WebRTC connection is to make two client side Applicati
 3. uuid (for assigning an ID to a non - existing meeting)
 4. dotenv (for injecting secrets)
 
+##### Starting the Server Side Application
+```
+1. create .env at project root
+2. refer to sample.env for key, and add personal values of MongoDB
+3. run command: npm i, for downloading all the dependencies for the application to run
+4. run command: npm run dev, for starting the Server Side Application
+```
 #### 1. HTTP GET /api/v1/signalling/health-status
 
 Description:
@@ -223,15 +230,20 @@ The Client Side Application contains of two Pages
 0. App.jsx: This is where Routing happens, this is where referencing storing names and appointment ID are stored
 1. Login2.jsx Page: This is used to for a user to add a unique AppointmentID and their Name( When integrated with vtalix, appointment ID and name are taken automatically)
 2.ThirdRoom3.jsx Page: This is where the actual Video Call Happens, it takes AppointmentId, name , report and transcript as props
-
-
 ```
-```
-External Dependencies
-1.) react-router-dom
-2.) socket.io-client
 
+### External Dependencies
+
+1. react-router-dom
+2. socket.io-client
+
+##### Starting the Client Side Application
 ```
-ThirdRoom.jsx
+0. In src/services/socket.js, change the IP value, to know the IP value > Open Command Prompt and run command: `ipconfig`
+1. run command: npm i, for downloading all the dependencies for the application to run
+2. run command: npm run dev, for starting the Server Side Application
+```
+
+#### ThirdRoom.jsx
 ```
 ```
