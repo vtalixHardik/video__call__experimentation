@@ -30,7 +30,6 @@ import { useNavigate } from "react-router-dom";
 // dependency imports, socket.io-client
 import { io } from "socket.io-client";
 
-
 const ThirdRoom3 = ({ appointmentId, name, report, transcript }) => {
 	const appointment_id = appointmentId.current;
 	let new_socket;
@@ -41,72 +40,74 @@ const ThirdRoom3 = ({ appointmentId, name, report, transcript }) => {
 	const [notes, setNotes] = useState();
 	const messagesRef = useRef([]);
 	const [messages, setMessages] = useState([]);
-	
+
 	// Refs and States for UI
 	const userVideo = useRef(); // for passing in video tag
 	const [partnerName, setPartnerName] = useState();
-	
+
 	const [focus, setFocus] = useState("chat");
 	const isFocusRef = useRef(true);
 	const [newMessage, setNewMessage] = useState(false);
-	
+
 	const [text, setText] = useState("");
 	const messagesEndRef = useRef(null);
-	
+
 	// Refs and States for Functionality
 	const socketRef = useRef(); // for Socket emits and ons
 	const userId = useRef();
 	const otherUser = useRef(); //  for remoteSocketID
-	
+
+	const isFirstRef = useRef();
+
 	const peerRef = useRef(); // for peer
 	const userStream = useRef(); //  for addTrack
 	const sendChannel = useRef();
 	const [answerSent, setAnswerSent] = useState(false);
-	
+
 	const [isCameraOn, setIsCameraOn] = useState(true);
 	const [isMicOn, setIsMicOn] = useState(true);
-	
+
 	const [signalingState, setSignalingState] = useState(null);
-	
+
 	const receivedICECandidates = useRef();
 	// const [receivedICECandidatesState, setReceivedICECandidatesState] = useState(new Set());
-	const [receivedICECandidatesState, setReceivedICECandidatesState] = useState([]);
-	
+	const [receivedICECandidatesState, setReceivedICECandidatesState] =
+		useState([]);
+
 	const [startTranscription, setStartTranscription] = useState(false);
-	
+
 	const mediaRecorderRef = useRef(null);
 
 	// Monitor and update signaling state, only when the correct signalling state is their, we will apply ICE Candidates
 	useEffect(() => {
-
 		const interval = setInterval(() => {
-
 			const currentState = peerRef?.current?.signalingState;
-			if (peerRef?.current?.signalingState && currentState !== signalingState) {
+			if (
+				peerRef?.current?.signalingState &&
+				currentState !== signalingState
+			) {
 				setSignalingState(currentState);
 			}
 		}, 100); // or on some RTC events if available
 
 		return () => clearInterval(interval);
-
 	}, [signalingState]);
 
 	// function to start video call
 	useEffect(() => {
 		console.log("Starting with getting user Media");
-		
+
 		navigator?.mediaDevices
 			?.getUserMedia({
 				video: true,
 				audio: true,
 			})
 			.then(async (stream) => {
-
 				// taking the permission from the user's browser and setting the local stream in the video tag
-				userVideo.current.srcObject = stream;// adding our own stream to Video Tag
-				userStream.current = stream;// storing our stream to add tracks later
+				userVideo.current.srcObject = stream; // adding our own stream to Video Tag
+				userStream.current = stream; // storing our stream to add tracks later
 
-				new_socket = connectSocket();// storing socket instance to get Socket ID later
+				new_socket = connectSocket(); // storing socket instance to get Socket ID later
 
 				// function to get Socket ID
 				const checkSocketId = async () => {
@@ -117,17 +118,20 @@ const ThirdRoom3 = ({ appointmentId, name, report, transcript }) => {
 				};
 
 				await checkSocketId();
-				console.log("printing after we get our Socket ID ", userId.current);
+				console.log(
+					"printing after we get our Socket ID ",
+					userId.current
+				);
 
 				// now we will hit the join room
 				joinRoom(appointment_id, name.current);
 
 				// listen for Server to emit If we joined Room Successfully
 				listenForJoinSuccess(handleJoinSuccess);
-				
+
 				// Listen for Incoming ICE Candidates
 				listenForICE(handleNewICECandidate);
-				
+
 				// Listen if the User Left
 				listenForUserLeft(endCall);
 
@@ -142,10 +146,8 @@ const ThirdRoom3 = ({ appointmentId, name, report, transcript }) => {
 
 	// function to handle Successfully Joining Room at the Server Side Application
 	const handleJoinSuccess = async (data) => {
-		
 		// Add existing messages pf previous call
 		if (data.chats && data.chats.length !== 0) {
-
 			setMessages(data.chats);
 
 			data.chats.map((item, index) => {
@@ -162,25 +164,22 @@ const ThirdRoom3 = ({ appointmentId, name, report, transcript }) => {
 		setPartnerName(data?.opponent_name || "Ghost");
 
 		const isFirst = !!(data.remoteSocket === null); // change to checking if there was remote Socket ID or offer or not
+		isFirstRef.current = isFirst;
 
 		if (isFirst) {
-
 			// wait for second user to join call from there application
 			listenForOffer(answerPeer);
-
 		} else {
-
 			// Store the Socket ID of the first user
 			otherUser.current = data.remoteSocket;
 
 			// create a peer connection and send the Offer to other user waiting for your call
-			callPeer();
+			callPeer(); 
 		}
 	};
 
 	// function to start call if you are second user to join the call
 	const callPeer = () => {
-
 		// create and store Peer Instance in a ref
 		peerRef.current = createPeer(userId.current);
 
@@ -191,7 +190,7 @@ const ThirdRoom3 = ({ appointmentId, name, report, transcript }) => {
 				peerRef.current.addTrack(track, userStream.current)
 			);
 
-			// create a dataChannel for Chat functionality
+		// create a dataChannel for Chat functionality
 		sendChannel.current = peerRef.current.createDataChannel("sendChannel");
 
 		// Add an Event Listener on the data channel for incoming messages
@@ -242,7 +241,11 @@ const ThirdRoom3 = ({ appointmentId, name, report, transcript }) => {
 			handleNegotiationNeededEvent(id);
 		};
 
-		// This event listenre logs ICE connection State
+		peer.onicegatheringstatechange = () => {
+			console.log("ICE Gathering State:", peer.iceGatheringState);
+		};
+
+		// This event listens logs ICE connection State
 		peer.oniceconnectionstatechange = () => {
 			console.log(
 				"🔄 ICE Connection State:",
@@ -251,13 +254,30 @@ const ThirdRoom3 = ({ appointmentId, name, report, transcript }) => {
 
 			if (peer.iceConnectionState === "connected") {
 				console.log("✅ Connection stabilized!");
-				setStartTranscription(true);
+				// setStartTranscription(true);
+			}
+
+			if (peer.iceConnectionState === "disconnected") {
+				console.log("❌ ICE connection lost.");
+			}
+
+			if (peer.iceConnectionState === "failed") {
+				console.error("❌ ICE connection failed, cannot recover.");
+				// Handle failed state, possibly retry connection or notify the user
 			}
 		};
 
 		// This Event Listener logs Connections of user
 		peer.onconnectionstatechange = () => {
 			console.log("Peer state:", peer.connectionState);
+			if (peer.connectionState === "failed" && isFirstRef.current === true) {
+				// Try restarting the ICE connection or handle accordingly
+				// For example, restart ICE connection
+				setTimeout(() => {
+					console.log("Attempting to restart ICE connection...");
+					peer.restartIce(); // Tries to re-initiate the ICE connection
+				}, 5000); // Wait a bit before retrying
+			}
 		};
 
 		return peer;
@@ -266,20 +286,18 @@ const ThirdRoom3 = ({ appointmentId, name, report, transcript }) => {
 	// function to create offer and send it to the remote user
 	const handleNegotiationNeededEvent = () => {
 		peerRef.current
-			.createOffer()// create SDP Offer using WebRTC API's in built method and pass it to `.then()`
-			.then((offer) => {
-
+			.createOffer() // create SDP Offer using WebRTC API's in built method and pass it to `.then()`
+			.then(async (offer) => {
 				// Set the self generated SDP offer as Local Description
-				peerRef.current.setLocalDescription(offer);
+				await peerRef.current.setLocalDescription(offer);
 
 				// return the offer for `.then()`
 				return offer;
 			})
 			.then((offer) => {
-
 				// send the offer to remote User
 				sendOffer(appointment_id, offer, otherUser.current);
-				
+
 				// wait for their answer
 				listenForAnswer(handleAnswer);
 			})
@@ -288,17 +306,20 @@ const ThirdRoom3 = ({ appointmentId, name, report, transcript }) => {
 
 	// function to handle tracks of Remote Video
 	const handleTrackEvent = (e) => {
-
 		// add tracks after a small delay
 		const waitForRemoteVideo = setInterval(() => {
-
-			console.log("src of video before setting ", remoteVideo.current.srcObject);
+			console.log(
+				"src of video before setting ",
+				remoteVideo.current.srcObject
+			);
 			if (remoteVideo.current && remoteVideo.current.srcObject === null) {
-				
 				remoteVideo.current.srcObject = e.streams[0];
-				
-				console.log("src of video after setting ",remoteVideo.current.srcObject);
-				
+
+				console.log(
+					"src of video after setting ",
+					remoteVideo.current.srcObject
+				);
+
 				console.log("✅ Remote video set!");
 			}
 			// Clear Interval as Remote Video has been set
@@ -309,8 +330,7 @@ const ThirdRoom3 = ({ appointmentId, name, report, transcript }) => {
 	};
 
 	// function to handle incoming offer and Answer the Peer in its response
-	const answerPeer = (incoming) => {
-
+	const answerPeer = async (incoming) => {
 		// store remote Socket ID of other user
 		otherUser.current = incoming.from;
 
@@ -330,19 +350,19 @@ const ThirdRoom3 = ({ appointmentId, name, report, transcript }) => {
 		const desc = new RTCSessionDescription(incoming.offer);
 
 		// Set that Incoming Description as Remote Description
-		peerRef.current
+		await peerRef.current
 			?.setRemoteDescription(desc)
-			.then(() => {
+			.then(async () => {
 				// Add tracks to the Peer Connection
-				userStream.current
+				await userStream.current
 					.getTracks()
 					.forEach((track) =>
 						peerRef.current.addTrack(track, userStream.current)
 					);
 			})
-			.then(() => {
+			.then(async () => {
 				// Create an Answer SDP
-				return peerRef.current?.createAnswer();
+				return await peerRef.current?.createAnswer();
 			})
 			.then((answer) => {
 				// Set the Generated SDP as Local Description
@@ -352,10 +372,9 @@ const ThirdRoom3 = ({ appointmentId, name, report, transcript }) => {
 				return answer;
 			})
 			.then((answer) => {
-
 				// send answer to other peer
 				sendAnswer(appointment_id, answer, incoming.from);
-				
+
 				// set answerSent state to true
 				setAnswerSent(true);
 			});
@@ -363,12 +382,10 @@ const ThirdRoom3 = ({ appointmentId, name, report, transcript }) => {
 
 	// function to handle incoming answer
 	const handleAnswer = async (message) => {
-		
-		// validate if peer connection was initialized before handling answer 
+		// validate if peer connection was initialized before handling answer
 		if (!peerRef.current) {
-
 			console.log("❌ Peer Connection is not initialized yet!");
-			
+
 			return;
 		}
 
@@ -385,17 +402,22 @@ const ThirdRoom3 = ({ appointmentId, name, report, transcript }) => {
 
 	// function to send ICE candidate to other user
 	const handleICECandidateEvent = (event) => {
-
 		console.log("generated candidate is ", event.candidate);
 
 		if (event.candidate) {
+			console.log(
+				"Sending ICE candidate ",
+				event.candidate,
+				"to ",
+				otherUser.current
+			);
 
-			console.log("Sending ICE candidate ", event.candidate, "to ", otherUser.current);
-			
 			sendICE(otherUser.current, event.candidate);
 		}
 		if (!event.candidate) {
-			console.log("Generated Candidate is null, marking the completion of all candidates");
+			console.log(
+				"Generated Candidate is null, marking the completion of all candidates"
+			);
 		}
 	};
 
@@ -414,7 +436,10 @@ const ThirdRoom3 = ({ appointmentId, name, report, transcript }) => {
 				"✅ Connection stable! Applying ICE candidate immediately."
 			);
 
-			console.log("stored Candidates while applying Candidates immediately is ", receivedICECandidates.current);
+			console.log(
+				"stored Candidates while applying Candidates immediately is ",
+				receivedICECandidates.current
+			);
 
 			await peerRef.current.addIceCandidate(
 				new RTCIceCandidate(candidate)
@@ -443,42 +468,45 @@ const ThirdRoom3 = ({ appointmentId, name, report, transcript }) => {
 
 	// useEffect to add stored Ice candidates
 	useEffect(() => {
+		console.log(
+			"+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
+		);
 
-		console.log("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++");
-
-		console.log(receivedICECandidates?.current?.length || 0, "received candidates are ", receivedICECandidates?.current);
+		console.log(
+			receivedICECandidates?.current?.length || 0,
+			"received candidates are ",
+			receivedICECandidates?.current
+		);
 
 		console.log("signalling state is ", peerRef?.current?.signalingState);
 
-		console.log("remote video Current src is ", remoteVideo.current.srcObject);
+		console.log(
+			"remote video Current src is ",
+			remoteVideo.current.srcObject
+		);
 
 		// function to add ICE Candidates
 		const addCandidates = async () => {
 			if (
-				receivedICECandidates?.current &&// make sure received candidates are not undefined
-				receivedICECandidates?.current?.length !== 0 &&// make sure if received candidates is not an empty array
-				peerRef?.current?.signalingState === "stable" &&// make sure the signalling state is stable before applying ICE Candidates
-				answerSent === true// make sure the SDP Answer was sent before applying the ICE Candidates
+				receivedICECandidates?.current && // make sure received candidates are not undefined
+				receivedICECandidates?.current?.length !== 0 && // make sure if received candidates is not an empty array
+				peerRef?.current?.signalingState === "stable" && // make sure the signalling state is stable before applying ICE Candidates
+				answerSent === true // make sure the SDP Answer was sent before applying the ICE Candidates
 			) {
 				console.log("ICE candidate condition passed");
 
 				// Iterate through each Candidate and Apply them
 				for (const candidate of receivedICECandidates.current) {
-		
 					console.log("Candidate being Applied", candidate);
-		
-					try {
 
+					try {
 						await peerRef.current.addIceCandidate(
 							new RTCIceCandidate(candidate)
 						);
 
 						console.log("Candidate being Applied");
-					
 					} catch (error) {
-		
 						console.error("Error adding ICE candidate:", error);
-		
 					}
 				}
 
@@ -497,7 +525,6 @@ const ThirdRoom3 = ({ appointmentId, name, report, transcript }) => {
 
 	// function to send message using data channel
 	const sendMessage = (e) => {
-		
 		e.preventDefault();
 
 		// Validation to prevent sending empty messages
@@ -528,7 +555,6 @@ const ThirdRoom3 = ({ appointmentId, name, report, transcript }) => {
 
 	// function to handle incoming chat messages
 	const handleReceiveMessage = (e) => {
-
 		// Change UI
 		setMessages((messages) => [
 			...messages,
@@ -558,13 +584,11 @@ const ThirdRoom3 = ({ appointmentId, name, report, transcript }) => {
 
 	// Function to toggle the microphone
 	const toggleMic = () => {
-
 		const audioTrack = userStream?.current?.getAudioTracks()[0];
 
 		if (audioTrack) {
-		
 			const newState = !audioTrack.enabled;
-		
+
 			audioTrack.enabled = newState;
 
 			setIsMicOn((prev) => !prev);
@@ -573,11 +597,9 @@ const ThirdRoom3 = ({ appointmentId, name, report, transcript }) => {
 
 	// Function to toggle the microphone
 	const toggleCamera = () => {
-
 		const videoTrack = userStream?.current?.getVideoTracks()[0];
 
 		if (videoTrack) {
-
 			const newState = !videoTrack.enabled;
 
 			videoTrack.enabled = newState;

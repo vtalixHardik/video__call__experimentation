@@ -2,7 +2,7 @@ import { io } from "socket.io-client";
 import axios from "axios";
 
 
-const ip = 14;
+const ip = 9;
 const URL = `http://192.168.1.${ip}:3015`;
 
 const socket = io(URL, {
